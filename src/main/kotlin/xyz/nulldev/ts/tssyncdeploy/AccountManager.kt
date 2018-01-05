@@ -245,16 +245,19 @@ object AccountManager {
         timer.schedule(1.minutes, 1.minutes) {
             println("Reaping accounts...")
             synchronized(accounts) {
-                val toRemove = mutableListOf<String>()
-                accounts.forEach { t: String, u: Account ->
-                    u.lock.withLock {
+                val toRemove = mutableListOf<Account>()
+                accounts.forEach { _: String, u: Account ->
+                    if(u.lock.tryLock()) {
                         val diff = System.currentTimeMillis() - u.lastUsedTime
-                        if(diff.milliseconds > ACCOUNT_REMOVAL_TIMEOUT) {
-                            toRemove.add(t)
-                        }
+                        if (diff.milliseconds > ACCOUNT_REMOVAL_TIMEOUT)
+                            toRemove.add(u) //Keep account locked
+                        else u.lock.unlock()
                     }
                 }
-                toRemove.forEach { accounts.remove(it) }
+                toRemove.forEach {
+                    accounts.remove(it.name)
+                    it.lock.unlock()
+                }
             }
         }
 
